@@ -11,39 +11,41 @@ type RaftRPC struct {
 }
 
 type AppendEntriesArgs struct {
-	term         int
-	leaderId     int
-	prevLogIndex int
-	prevLogTerm  int
-	logs         []Log
-	leaderCommit int
+	Term         int
+	LeaderId     int32
+	PrevLogIndex int
+	PrevLogTerm  int
+	Logs         []Log
+	LeaderCommit int
 }
 type AppendEntriesResult struct {
-	term    int
-	success bool
+	Term    int
+	Success bool
 }
 
-func (raftRpc *RaftRPC) AppendEntries(args *AppendEntriesArgs, res *AppendEntriesResult) {
+func (raftRpc *RaftRPC) AppendEntries(args *AppendEntriesArgs, res *AppendEntriesResult) error {
 	success, term := raftRpc.node.handleAppendEntries(args)
-	res.term = term
-	res.success = success
+	res.Term = term
+	res.Success = success
+	return nil
 }
 
 type RequestVoteArgs struct {
-	term         int
-	candidateId  int
-	lastLogIndex int
-	lastLogTerm  int
+	Term         int
+	CandidateId  int32
+	LastLogIndex int
+	LastLogTerm  int
 }
 type RequestVoteResult struct {
-	term        int
-	voteGranted bool
+	Term        int
+	VoteGranted bool
 }
 
-func (raftRpc *RaftRPC) RequestVote(args *RequestVoteArgs, res *RequestVoteResult) {
+func (raftRpc *RaftRPC) RequestVote(args *RequestVoteArgs, res *RequestVoteResult) error {
 	success, term := raftRpc.node.handleRequestVote(args)
-	res.term = term
-	res.voteGranted = success
+	res.Term = term
+	res.VoteGranted = success
+	return nil
 }
 
 func StartRpcServer(localAddress string, node *RaftNode) {
@@ -71,32 +73,40 @@ func StartRpcServer(localAddress string, node *RaftNode) {
 	}()
 }
 
-func (node *RaftNode) SendAppendEntries(peerId int, args *AppendEntriesArgs) *AppendEntriesResult {
-	client, err := node.peers[peerId]
-	if !err {
-		fmt.Errorf("no connection to peer %d", peerId)
-		return nil
+func (node *RaftNode) SendAppendEntries(peerId int32, args *AppendEntriesArgs) (*AppendEntriesResult, error) {
+	clientAddress, ok := node.peers[peerId]
+	if !ok {
+		return nil, fmt.Errorf("no peer %d", peerId)
 	}
+	client, err := rpc.Dial("tcp", clientAddress)
+	if err != nil {
+
+		return nil, fmt.Errorf("no connection to peer %d", peerId)
+	}
+	defer client.Close()
 	res := &AppendEntriesResult{}
-	err1 := client.Call("Raft.AppendEntries", args, res)
-	if err1 != nil {
-		fmt.Errorf("RPC call failed: %v", err)
-		return nil
+	err = client.Call("RaftRPC.AppendEntries", args, res)
+	if err != nil {
+		return nil, fmt.Errorf("RPC call failed: %v", err)
 	}
-	return res
+	return res, nil
 }
 
-func (node *RaftNode) SendRequestVote(peerId int, args *RequestVoteArgs) *RequestVoteResult {
-	client, err := node.peers[peerId]
-	if !err {
-		fmt.Errorf("no connection to peer %d", peerId)
-		return nil
+func (node *RaftNode) SendRequestVote(peerId int32, args *RequestVoteArgs) (*RequestVoteResult, error) {
+	clientAddress, ok := node.peers[peerId]
+	if !ok {
+		return nil, fmt.Errorf("no peer %d", peerId)
 	}
+	client, err := rpc.Dial("tcp", clientAddress)
+	if err != nil {
+
+		return nil, fmt.Errorf("no connection to peer %d", peerId)
+	}
+	defer client.Close()
 	res := &RequestVoteResult{}
-	err1 := client.Call("Raft.RequestVote", args, res)
-	if err1 != nil {
-		fmt.Errorf("RPC call failed: %v", err)
-		return nil
+	err = client.Call("RaftRPC.RequestVote", args, res)
+	if err != nil {
+		return nil, fmt.Errorf("RPC call failed: %v", err)
 	}
-	return res
+	return res, nil
 }

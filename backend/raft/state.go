@@ -7,10 +7,10 @@ import (
 
 type StableState struct {
 	currentTerm int
-	votedFor    int
+	votedFor    int32
 	lastContact time.Time
 
-	lock sync.RWMutex
+	lock *sync.RWMutex
 }
 
 func (state *StableState) GetCurrentTerm() int {
@@ -25,13 +25,13 @@ func (state *StableState) SetCurrentTerm(newTerm int) {
 	state.currentTerm = newTerm
 }
 
-func (state *StableState) GetVotedFor() int {
+func (state *StableState) GetVotedFor() int32 {
 	state.lock.RLock()
 	defer state.lock.RUnlock()
 	return state.votedFor
 }
 
-func (state *StableState) SetVotedFor(newVote int) {
+func (state *StableState) SetVotedFor(newVote int32) {
 	state.lock.Lock()
 	defer state.lock.Unlock()
 	state.votedFor = newVote

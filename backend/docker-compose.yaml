@@ -1,0 +1,48 @@
+version: '3'
+
+services:
+  node1:
+    build: .
+    ports:
+      - "11001:11000"  # HTTP port
+      - "12001:12000"  # Raft port
+    command: >
+      ./raft-server 
+      -id 1
+      -haddr 0.0.0.0:11000
+      -raddr 0.0.0.0:12000
+      -peers 2=node2:12000,3=node3:12000
+    networks:
+      - raft-net
+
+  node2:
+    build: .
+    ports:
+      - "11002:11000"
+      - "12002:12000"
+    command: >
+      ./raft-server 
+      -id 2
+      -haddr 0.0.0.0:11000
+      -raddr 0.0.0.0:12000
+      -peers 1=node1:12000,3=node3:12000
+    networks:
+      - raft-net
+
+  node3:
+    build: .
+    ports:
+      - "11003:11000"
+      - "12003:12000"
+    command: >
+      ./raft-server 
+      -id 3
+      -haddr 0.0.0.0:11000
+      -raddr 0.0.0.0:12000
+      -peers 1=node1:12000,2=node2:12000
+    networks:
+      - raft-net
+
+networks:
+  raft-net:
+    driver: bridge

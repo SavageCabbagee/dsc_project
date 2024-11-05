@@ -11,11 +11,12 @@ type Command struct {
 }
 
 type Store struct {
-	mu   sync.Mutex
 	dict map[string]string
+	lock *sync.Mutex
 }
 
 func (s *Store) Get(key string) string {
+	// fmt.Println(s.dict)
 	return s.dict[key]
 }
 
@@ -24,14 +25,14 @@ func (s *Store) Set(key, value string) {
 }
 
 func (s *Store) Delete(key string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.lock.Lock()
+	defer s.lock.Unlock()
 	delete(s.dict, key)
 }
 
 func (s *Store) ApplyLogs(logs []Log) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.lock.Lock()
+	defer s.lock.Unlock()
 	for _, log := range logs {
 		command := log.Command
 		switch command.Operation {

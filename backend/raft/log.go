@@ -10,13 +10,53 @@ type Log struct {
 
 type RaftLogStore struct {
 	logs []Log
-	lock sync.RWMutex
+	lock *sync.RWMutex
 }
 
-func (logStore *RaftLogStore) GetLog(index uint64) Log {
+func (logStore *RaftLogStore) GetLastLogIndex() int {
 	logStore.lock.RLock()
 	defer logStore.lock.RUnlock()
-	return logStore.logs[index]
+	return len(logStore.logs)
+}
+
+func (logStore *RaftLogStore) GetLastLogTerm() int {
+	logStore.lock.RLock()
+	defer logStore.lock.RUnlock()
+	if len(logStore.logs) == 0 {
+		return 0
+	}
+	return logStore.logs[len(logStore.logs)-1].Term
+}
+
+func (logStore *RaftLogStore) GetLog(index int) Log {
+	logStore.lock.RLock()
+	defer logStore.lock.RUnlock()
+	if index-1 < 0 {
+		return Log{0, 0, Command{}}
+	}
+	return logStore.logs[index-1]
+}
+
+func (logStore *RaftLogStore) GetLogRange(startIndex, endIndex int) []Log {
+	logStore.lock.RLock()
+	defer logStore.lock.RUnlock()
+	return logStore.logs[startIndex-1 : endIndex-1]
+}
+
+func (logStore *RaftLogStore) GetLogsFrom(startIndex int) []Log {
+	logStore.lock.RLock()
+	defer logStore.lock.RUnlock()
+	start := startIndex - 1
+	if start < 0 {
+		start = 0
+	}
+	return logStore.logs[start:]
+}
+
+func (logStore *RaftLogStore) AppendLog(command Command, term int) {
+	logStore.lock.Lock()
+	defer logStore.lock.Unlock()
+	logStore.logs = append(logStore.logs, Log{len(logStore.logs) + 1, term, command})
 }
 
 func (logStore *RaftLogStore) AppendEntries(logs []Log) {
@@ -29,8 +69,8 @@ func (logStore *RaftLogStore) AppendEntries(logs []Log) {
 				newEntries = logs[i:]
 				break
 			}
-			if entry.Term != logStore.logs[entry.Index].Term {
-				logStore.logs = logStore.logs[:entry.Index+1]
+			if entry.Term != logStore.logs[entry.Index-1].Term {
+				logStore.logs = logStore.logs[:entry.Index]
 				newEntries = logs[i:]
 				break
 			}

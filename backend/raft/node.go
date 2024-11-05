@@ -1,7 +1,8 @@
 package raft
 
 import (
-	"net/rpc"
+	"fmt"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -13,64 +14,29 @@ const (
 )
 
 type RaftNode struct {
-	id          int
-	stableState StableState
-	logStore    RaftLogStore
+	id          int32
+	stableState *StableState
+	logStore    *RaftLogStore
 
 	commitIndex int
 	lastApplied int
 
-	nextIndex  []int
-	matchIndex []int
-
-	store Store
+	store *Store
 
 	heartbeatTimer <-chan time.Time
 
-	leaderAddr string
-	leaderId   int
+	leaderId atomic.Int32
 
 	state atomic.Int32
-	peers map[int]*rpc.Client // key: id, string: client
+	peers map[int32]string // key: id, string: client
+
+	// leader state
+	followerState map[int32]*FollowerState
 }
 
-func (node *RaftNode) run() {
-	for {
-		switch node.state.Load() {
-		case FOLLOWER:
-			node.runFollower()
-		case CANDIDATE:
-			node.runCandidate()
-		case LEADER:
-			node.runLeader()
-		}
-	}
+func (node *RaftNode) quorumSize() int {
+	return (len(node.peers)+1)/2 + 1
 }
-
-func (node *RaftNode) runFollower() {
-	for node.state.Load() == FOLLOWER {
-		select {
-		case <-node.heartbeatTimer:
-			if time.Since(node.stableState.GetLastContact()) < minTimeout {
-				continue
-			}
-			node.state.Store(CANDIDATE)
-		default:
-			continue
-		}
-	}
-}
-func (node *RaftNode) runCandidate() {
-	node.stableState.SetCurrentTerm(node.stableState.GetCurrentTerm() + 1)
-	node.stableState.SetVotedFor(node.id)
-	node.resetTimer()
-	// goroutine for sending requestvote
-	// timeout
-	for node.state.Load() == CANDIDATE {
-	}
-
-}
-func (node *RaftNode) runLeader() {}
 
 func (node *RaftNode) updateTerm(term int) {
 	node.stableState.SetCurrentTerm(term)
@@ -82,29 +48,174 @@ func (node *RaftNode) resetTimer() {
 	node.heartbeatTimer = randomTimeout()
 }
 
+func NewRaftNode(id int32, peers map[int32]string) *RaftNode {
+	state := &StableState{0, -1, time.Now(), &sync.RWMutex{}}
+	logStore := &RaftLogStore{make([]Log, 0), &sync.RWMutex{}}
+	store := &Store{make(map[string]string), &sync.Mutex{}}
+	node := &RaftNode{id, state, logStore, 0, 0, store, make(<-chan time.Time), atomic.Int32{}, atomic.Int32{}, peers, map[int32]*FollowerState{}}
+	node.leaderId.Store(-1)
+	return node
+}
+
+func (node *RaftNode) Run() {
+	for {
+		switch node.state.Load() {
+		case FOLLOWER:
+			fmt.Println("FOLLOWER")
+			node.runFollower()
+		case CANDIDATE:
+			fmt.Println("CANDIDATE")
+			node.runCandidate()
+		case LEADER:
+			fmt.Println("LEADER")
+			node.runLeader()
+		}
+	}
+}
+
+func (node *RaftNode) runFollower() {
+	node.resetTimer()
+	for node.state.Load() == FOLLOWER {
+		select {
+		case <-node.heartbeatTimer:
+			// fmt.Println("TIMEOUT")
+			if time.Since(node.stableState.GetLastContact()) < minTimeout {
+				continue
+			}
+			node.state.Store(CANDIDATE)
+		default:
+			continue
+		}
+	}
+}
+
+func (node *RaftNode) runCandidate() {
+	node.stableState.SetCurrentTerm(node.stableState.GetCurrentTerm() + 1)
+	node.stableState.SetVotedFor(node.id)
+	node.resetTimer()
+	responseChannel := make(chan *RequestVoteResult, len(node.peers)+1)
+	request := &RequestVoteArgs{node.stableState.GetCurrentTerm(), node.id, node.logStore.GetLastLogIndex(), node.logStore.GetLastLogTerm()}
+	for id := range node.peers {
+		go func(peerId int32) {
+			fmt.Println("SENDING")
+			response, err := node.SendRequestVote(peerId, request)
+			fmt.Println(response)
+			if err != nil {
+				fmt.Println("Error")
+				fmt.Println(err)
+				return
+			}
+			responseChannel <- response
+		}(id)
+	}
+	responseChannel <- &RequestVoteResult{node.stableState.GetCurrentTerm(), true}
+
+	votesNeeded := node.quorumSize()
+	grantedVotes := 0
+	for node.state.Load() == CANDIDATE {
+		select {
+		case res := <-responseChannel:
+			if res.Term > node.stableState.GetCurrentTerm() {
+				node.state.Store(FOLLOWER)
+				node.stableState.SetCurrentTerm(res.Term)
+				node.stableState.SetLastContact(time.Now())
+				fmt.Printf("Node %d, now a follower", node.id)
+				return
+			}
+			if res.VoteGranted {
+				grantedVotes++
+			}
+
+			if grantedVotes >= votesNeeded {
+				node.state.Store(LEADER)
+				node.leaderId.Store(node.id)
+				return
+			}
+		case <-node.heartbeatTimer:
+			fmt.Println("Election Timeout. Restarting election")
+			return
+		}
+	}
+
+}
+
+func (node *RaftNode) runLeader() {
+	node.followerState = make(map[int32]*FollowerState)
+	for i := range node.peers {
+		node.followerState[i] = &FollowerState{node.logStore.GetLastLogIndex() + 1, 0}
+	}
+	leaderHeartbeat := leaderHeartbeatTimeout()
+	for node.state.Load() == LEADER {
+		<-leaderHeartbeat
+		for i := range node.peers {
+			go node.SendHeartbeat(i, node.followerState[i])
+		}
+		leaderHeartbeat = leaderHeartbeatTimeout()
+	}
+}
+
+func (node *RaftNode) handleCommand(command Command) (string, error) {
+	if command.Operation == "GET" {
+		// fmt.Println("CURRENTLY HERE")
+		// fmt.Println(command.Key)
+		return node.store.Get(command.Key), nil
+	}
+
+	if node.state.Load() != LEADER {
+		return "", fmt.Errorf("node is not leader")
+	}
+	fmt.Println(node.logStore.logs)
+	node.logStore.AppendLog(command, node.stableState.GetCurrentTerm())
+	quorum := 0
+	updateChan := make(chan bool, len(node.peers)+1)
+	fmt.Println(node.logStore.logs)
+	for i := range node.peers {
+		go node.UpdateFollower(i, node.followerState[i], updateChan)
+	}
+	updateChan <- true
+	fmt.Println(quorum)
+	for quorum < node.quorumSize() {
+		<-updateChan
+		quorum++
+		fmt.Println(quorum)
+	}
+	fmt.Println(node.commitIndex)
+	fmt.Println(node.logStore.GetLastLogIndex())
+	fmt.Println(node.lastApplied)
+	node.commitIndex = node.logStore.GetLastLogIndex()
+	for node.lastApplied < node.commitIndex {
+		fmt.Println(node.logStore.GetLogRange(node.lastApplied+1, node.commitIndex+1))
+		node.store.ApplyLogs(node.logStore.GetLogRange(node.lastApplied+1, node.commitIndex+1))
+		node.lastApplied = node.commitIndex
+	}
+	fmt.Println(node.store.dict)
+	return "", nil
+}
+
 func (node *RaftNode) handleAppendEntries(args *AppendEntriesArgs) (bool, int) {
+	fmt.Println("RECEIVING HEARTBEAT")
 	node.stableState.SetLastContact(time.Now())
 	node.resetTimer()
-	if args.term < node.stableState.GetCurrentTerm() {
+	if args.Term < node.stableState.GetCurrentTerm() {
 		return false, node.stableState.GetCurrentTerm()
 	}
 
-	if args.term > node.stableState.GetCurrentTerm() {
-		node.updateTerm(args.term)
+	if args.Term > node.stableState.GetCurrentTerm() {
+		node.updateTerm(args.Term)
 	}
 
 	// update leader
-	node.leaderId = args.leaderId
+	node.leaderId.Store(args.LeaderId)
 
-	if len(node.logStore.logs) < args.prevLogIndex || node.logStore.logs[args.prevLogIndex].Term != args.term {
+	if node.logStore.GetLastLogIndex() != 0 && (node.logStore.GetLastLogIndex() < args.PrevLogIndex || node.logStore.GetLastLogTerm() != args.Term) {
 		return false, node.stableState.GetCurrentTerm()
 	}
 	// handle 3 and 4
-	node.logStore.AppendEntries(args.logs)
-	if args.leaderCommit > node.commitIndex {
-		node.commitIndex = min(args.leaderCommit, len(node.logStore.logs))
+	node.logStore.AppendEntries(args.Logs)
+	if args.LeaderCommit > node.commitIndex {
+		node.commitIndex = min(args.LeaderCommit, node.logStore.GetLastLogIndex())
 		for node.lastApplied < node.commitIndex {
-			node.store.ApplyLogs(node.logStore.logs[node.lastApplied+1 : node.commitIndex])
+			node.store.ApplyLogs(node.logStore.GetLogRange(node.lastApplied+1, node.commitIndex+1))
 			node.lastApplied = node.commitIndex
 		}
 	}
@@ -112,27 +223,33 @@ func (node *RaftNode) handleAppendEntries(args *AppendEntriesArgs) (bool, int) {
 }
 
 func (node *RaftNode) handleRequestVote(args *RequestVoteArgs) (bool, int) {
+	fmt.Println("RECEIVING")
+	fmt.Println(args.CandidateId)
 	if time.Since(node.stableState.GetLastContact()) < minTimeout {
 		return false, node.stableState.GetCurrentTerm()
 	}
+	fmt.Println("Condtion1 passed")
 
-	if args.term < node.stableState.GetCurrentTerm() {
+	if args.Term < node.stableState.GetCurrentTerm() {
 		return false, node.stableState.GetCurrentTerm()
 	}
+	fmt.Println("Condtion 2 passed")
 
-	if args.term > node.stableState.GetCurrentTerm() {
-		node.updateTerm(args.term)
+	if args.Term > node.stableState.GetCurrentTerm() {
+		node.updateTerm(args.Term)
 	}
 
-	if node.stableState.GetVotedFor() != -1 || node.stableState.GetVotedFor() != args.candidateId {
+	if node.stableState.GetVotedFor() != -1 && node.stableState.GetVotedFor() != args.CandidateId {
 		return false, node.stableState.GetCurrentTerm()
 	}
+	fmt.Println("Condtion 3 passed")
 
-	if node.logStore.logs[len(node.logStore.logs)-1].Term > args.lastLogTerm ||
-		len(node.logStore.logs) > args.lastLogIndex {
+	if node.logStore.GetLastLogTerm() > args.LastLogTerm ||
+		node.logStore.GetLastLogIndex() > args.LastLogIndex {
 		return false, node.stableState.GetCurrentTerm()
 	}
-	node.stableState.SetVotedFor(args.candidateId)
+	fmt.Println("Condtion 4 passed")
+	node.stableState.SetVotedFor(args.CandidateId)
 	node.stableState.SetLastContact(time.Now())
 	node.resetTimer()
 
