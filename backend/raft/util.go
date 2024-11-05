@@ -5,9 +5,9 @@ import (
 	"time"
 )
 
-const TIMEOUT = 5000
+const minTimeout = 5000
 
 func randomTimeout() <-chan time.Time {
-	extra := time.Duration(rand.Int()) % TIMEOUT
-	return time.After(TIMEOUT + extra)
+	extra := time.Duration(rand.Int()) % minTimeout
+	return time.After(minTimeout + extra)
 }

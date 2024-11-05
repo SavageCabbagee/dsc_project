@@ -15,7 +15,7 @@ type AppendEntriesArgs struct {
 	leaderId     int
 	prevLogIndex int
 	prevLogTerm  int
-	logEntries   []Log
+	logs         []Log
 	leaderCommit int
 }
 type AppendEntriesResult struct {
@@ -44,11 +44,10 @@ func (raftRpc *RaftRPC) RequestVote(args *RequestVoteArgs, res *RequestVoteResul
 	success, term := raftRpc.node.handleRequestVote(args)
 	res.term = term
 	res.voteGranted = success
-
 }
 
-func StartRpcServer(localAddress string) {
-	raftRpc := new(RaftRPC)
+func StartRpcServer(localAddress string, node *RaftNode) {
+	raftRpc := &RaftRPC{node: node}
 	rpcServer := rpc.NewServer()
 	err := rpcServer.Register(raftRpc)
 	if err != nil {
@@ -72,7 +71,7 @@ func StartRpcServer(localAddress string) {
 	}()
 }
 
-func (node *RaftNode) sendAppendEntries(peerId int, args *AppendEntriesArgs) *AppendEntriesResult {
+func (node *RaftNode) SendAppendEntries(peerId int, args *AppendEntriesArgs) *AppendEntriesResult {
 	client, err := node.peers[peerId]
 	if !err {
 		fmt.Errorf("no connection to peer %d", peerId)
@@ -87,7 +86,7 @@ func (node *RaftNode) sendAppendEntries(peerId int, args *AppendEntriesArgs) *Ap
 	return res
 }
 
-func (node *RaftNode) sendRequestVote(peerId int, args *RequestVoteArgs) *RequestVoteResult {
+func (node *RaftNode) SendRequestVote(peerId int, args *RequestVoteArgs) *RequestVoteResult {
 	client, err := node.peers[peerId]
 	if !err {
 		fmt.Errorf("no connection to peer %d", peerId)

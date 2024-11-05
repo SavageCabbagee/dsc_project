@@ -16,14 +16,10 @@ type Store struct {
 }
 
 func (s *Store) Get(key string) string {
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	return s.dict[key]
 }
 
 func (s *Store) Set(key, value string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	s.dict[key] = value
 }
 
@@ -34,6 +30,8 @@ func (s *Store) Delete(key string) {
 }
 
 func (s *Store) ApplyLogs(logs []Log) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	for _, log := range logs {
 		command := log.Command
 		switch command.Operation {
