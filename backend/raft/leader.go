@@ -17,11 +17,12 @@ func (node *RaftNode) UpdateFollower(peerId int32, followerState *FollowerState,
 	success := false
 	for !success {
 		// change prev
-		fmt.Println(node.id, followerState.nextIndex-1, node.logStore.GetLog(followerState.nextIndex).Term)
+		fmt.Println(node.id, followerState.nextIndex-1, node.logStore.GetLog(followerState.nextIndex-1).Term)
 		req := &AppendEntriesArgs{node.stableState.GetCurrentTerm(), node.id, followerState.nextIndex - 1, node.logStore.GetLog(followerState.nextIndex - 1).Term, node.logStore.GetLogsFrom(followerState.nextIndex), node.commitIndex}
 		res, err := node.SendAppendEntries(peerId, req)
 		if err != nil {
 			fmt.Printf("ERROR %v", err)
+			return
 		}
 		if res.Term > node.stableState.GetCurrentTerm() {
 			node.updateTerm(res.Term)

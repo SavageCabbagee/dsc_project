@@ -194,22 +194,33 @@ func (node *RaftNode) handleCommand(command Command) (string, error) {
 
 func (node *RaftNode) handleAppendEntries(args *AppendEntriesArgs) (bool, int) {
 	fmt.Println("RECEIVING HEARTBEAT")
+	fmt.Println(args.PrevLogIndex, args.PrevLogTerm)
+	fmt.Println(node.stableState.GetCurrentTerm())
+	fmt.Println(node.logStore.GetLastLogIndex())
+	fmt.Println(node.logStore.GetLastLogTerm())
+	fmt.Println(args.Term)
+	fmt.Println(node.logStore.GetLastLogIndex() < args.PrevLogIndex)
+	fmt.Println(node.logStore.GetLastLogTerm() != args.Term)
+
 	node.stableState.SetLastContact(time.Now())
 	node.resetTimer()
 	if args.Term < node.stableState.GetCurrentTerm() {
 		return false, node.stableState.GetCurrentTerm()
 	}
+	fmt.Println("Condtion1 passed")
 
 	if args.Term > node.stableState.GetCurrentTerm() {
 		node.updateTerm(args.Term)
 	}
+	fmt.Println("Condtion 2 passed")
 
 	// update leader
 	node.leaderId.Store(args.LeaderId)
 
-	if node.logStore.GetLastLogIndex() != 0 && (node.logStore.GetLastLogIndex() < args.PrevLogIndex || node.logStore.GetLastLogTerm() != args.Term) {
+	if node.logStore.GetLastLogIndex() != 0 && (node.logStore.GetLastLogIndex() < args.PrevLogIndex || node.logStore.GetLastLogTerm() != args.PrevLogTerm) {
 		return false, node.stableState.GetCurrentTerm()
 	}
+	fmt.Println("Condtion 3 passed")
 	// handle 3 and 4
 	node.logStore.AppendEntries(args.Logs)
 	if args.LeaderCommit > node.commitIndex {

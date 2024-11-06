@@ -1,6 +1,7 @@
 package raft
 
 import (
+	"fmt"
 	"sync"
 )
 
@@ -17,6 +18,8 @@ type Store struct {
 
 func (s *Store) Get(key string) string {
 	// fmt.Println(s.dict)
+	s.lock.Lock()
+	defer s.lock.Unlock()
 	return s.dict[key]
 }
 
@@ -25,8 +28,7 @@ func (s *Store) Set(key, value string) {
 }
 
 func (s *Store) Delete(key string) {
-	s.lock.Lock()
-	defer s.lock.Unlock()
+	fmt.Printf("Deleting key: %s\n", key)
 	delete(s.dict, key)
 }
 

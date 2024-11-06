@@ -24,14 +24,15 @@ type KeyValueRequest struct {
 }
 
 type NodeStatus struct {
-	NodeId       int32 `json:"nodeId"`
-	State        int32 `json:"state"`
-	CurrentTerm  int   `json:"currentTerm"`
-	VotedFor     int32 `json:"votedFor"`
-	LeaderId     int32 `json:"leaderId"`
-	LastLogIndex int   `json:"lastLogIndex"`
-	LastLogTerm  int   `json:"lastLogTerm"`
-	Logs         []Log `json:"logs"`
+	NodeId       int32             `json:"nodeId"`
+	State        int32             `json:"state"`
+	CurrentTerm  int               `json:"currentTerm"`
+	VotedFor     int32             `json:"votedFor"`
+	LeaderId     int32             `json:"leaderId"`
+	LastLogIndex int               `json:"lastLogIndex"`
+	LastLogTerm  int               `json:"lastLogTerm"`
+	Logs         []Log             `json:"logs"`
+	Store        map[string]string `json:"store"`
 }
 
 func NewHttpServer(addr string, node *RaftNode) *RaftHTTPServer {
@@ -81,6 +82,16 @@ func (server *RaftHTTPServer) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 }
 
 func (server *RaftHTTPServer) handleKeyRequest(w http.ResponseWriter, r *http.Request) {
+	(w).Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+
+	if r.Method == "OPTIONS" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
 	getKey := func() string {
 		parts := strings.Split(r.URL.Path, "/")
 		if len(parts) != 3 {
@@ -131,7 +142,7 @@ func (server *RaftHTTPServer) handleKeyRequest(w http.ResponseWriter, r *http.Re
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
-		if _, err := server.node.handleCommand(Command{"DELETE", key, request.Value}); err != nil {
+		if _, err := server.node.handleCommand(Command{"DELETE", key, ""}); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -142,6 +153,7 @@ func (server *RaftHTTPServer) handleKeyRequest(w http.ResponseWriter, r *http.Re
 }
 
 func (server *RaftHTTPServer) handleStatus(w http.ResponseWriter, _ *http.Request) {
+	(w).Header().Set("Access-Control-Allow-Origin", "*")
 	status := NodeStatus{
 		NodeId:       server.node.id,
 		State:        server.node.state.Load(),
@@ -151,12 +163,14 @@ func (server *RaftHTTPServer) handleStatus(w http.ResponseWriter, _ *http.Reques
 		LastLogIndex: server.node.logStore.GetLastLogIndex(),
 		LastLogTerm:  server.node.logStore.GetLastLogTerm(),
 		Logs:         server.node.logStore.GetLogsFrom(1),
+		Store:        server.node.store.dict,
 	}
 
 	json.NewEncoder(w).Encode(status)
 }
 
 func (server *RaftHTTPServer) handleKill(w http.ResponseWriter, r *http.Request) {
+	(w).Header().Set("Access-Control-Allow-Origin", "*")
 	if r.Method != "POST" {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -164,14 +178,6 @@ func (server *RaftHTTPServer) handleKill(w http.ResponseWriter, r *http.Request)
 
 	go func() {
 		fmt.Printf("Node %d initiating graceful shutdown...\n", server.node.id)
-
-		// Step down if leader
-		// if server.node.state.Load() == LEADER {
-		// 	server.node.state.Store(FOLLOWER)
-		// 	server.node.leaderId.Store(-1)
-		// }
-
-		// Wait a moment for state changes to propagate
 		time.Sleep(100 * time.Millisecond)
 		server.Close()
 		fmt.Printf("Node %d shutdown complete\n", server.node.id)
