@@ -160,8 +160,14 @@ func (node *RaftNode) handleCommand(command Command) (string, error) {
 		// fmt.Println(command.Key)
 		return node.store.Get(command.Key), nil
 	}
-
 	if node.state.Load() != LEADER {
+		if command.Operation == "SET" {
+			// If not leader and is to set, then send request to leader.
+			fmt.Println(command.Operation, command.Key, command.Value)
+			strval, errorval := node.RelayCommandFromNode(node.leaderId.Load(), command)
+			fmt.Println("HWALEJKAW", strval, errorval)
+			return strval, errorval
+		}
 		return "", fmt.Errorf("node is not leader")
 	}
 	fmt.Println(node.logStore.logs)
@@ -216,7 +222,7 @@ func (node *RaftNode) handleAppendEntries(args *AppendEntriesArgs) (bool, int) {
 
 	// update leader
 	node.leaderId.Store(args.LeaderId)
-
+	// basically this part blocks because the term is wrong. CHECK AGAIN
 	if node.logStore.GetLastLogIndex() != 0 && (node.logStore.GetLastLogIndex() < args.PrevLogIndex || node.logStore.GetLastLogTerm() != args.PrevLogTerm) {
 		return false, node.stableState.GetCurrentTerm()
 	}

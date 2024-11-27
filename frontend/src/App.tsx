@@ -4,6 +4,7 @@ import { Input } from "./components/input";
 import { Card, CardContent, CardHeader, CardTitle } from "./components/card";
 
 type NodeStatus = {
+  aliveState: boolean;
   nodeId: number;
   state: number;
   currentTerm: number;
@@ -22,6 +23,9 @@ const nodeAddresses = [
   "http://localhost:11001",
   "http://localhost:11002",
   "http://localhost:11003",
+  "http://localhost:11004",
+  "http://localhost:11005",
+
 ];
 
 const stateMap = ["Follower", "Candidate", "Leader"];
@@ -34,15 +38,31 @@ export default function Component() {
     1: { key: "", value: "" },
     2: { key: "", value: "" },
     3: { key: "", value: "" },
+    4: { key: "", value: "" },
+    5: { key: "", value: "" },
+    6: { key: "", value: "" },
+    7: { key: "", value: "" },
+    8: { key: "", value: "" },
+    9: { key: "", value: "" },
   });
+
+  let originalStatus = {nodeId: -99, state: -99, currentTerm: -99, votedFor: -99, leaderId: -99, lastLogIndex: -99, lastLogTerm: -99, logs: [], store: {}}
+
+  useEffect(() => {
+    let originalNodeStatuses = [];
+    for (const key in keyValues) {
+      originalNodeStatuses.push({...originalStatus , nodeId: key})
+    }
+  },[])
 
   useEffect(() => {
     const fetchStatuses = async () => {
       const statuses = await Promise.all(
-        nodeAddresses.map((address) =>
+        nodeAddresses.map((address, index) =>
           fetch(`${address}/status`)
             .then((res) => res.json())
-            .catch(() => null)
+            .catch(() => ({...originalStatus , nodeId: index+1}))
+            // .catch(() => null)
         )
       );
       setNodeStatuses(statuses.filter(Boolean));
@@ -90,14 +110,27 @@ export default function Component() {
     await fetch(`${nodeAddresses[nodeId - 1]}/kill`, { method: "POST" });
   };
 
+  const handleStart = async (nodeId: number) => {
+    await fetch(`http://localhost:3009/api/start-container`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json", // Specify the content type as JSON
+      },
+      body: JSON.stringify({
+        // Add the data you want to send in the body
+        containerName: `node${nodeId}`,
+      }),
+    });
+  };
+
   return (
     <div className='container mx-auto p-4'>
       <h1 className='text-2xl font-bold mb-4'>Raft Cluster Status</h1>
-      <div className='grid grid-cols-1 md:grid-cols-3 gap-4 mb-4'>
+      <div className='grid grid-cols-1 md:grid-cols-5 gap-4 mb-4'>
         {nodeStatuses.map((status) => (
           <Card
             key={status.nodeId}
-            className={status.state === 2 ? "border-primary" : ""}
+            className={`${status.state != -99 ? "bg-green-200" : "bg-red-200"} ${status.state === 2 ? "border-primary bg-blue-200" : ""}`}
           >
             <CardHeader>
               <CardTitle>Node {status.nodeId}</CardTitle>
@@ -188,6 +221,13 @@ export default function Component() {
                   variant='destructive'
                 >
                   Kill Node
+                </Button>
+                <Button
+                  onClick={() => handleStart(status.nodeId)}
+                  variant='default'
+                  className="bg-green-600"
+                >
+                  Start Node
                 </Button>
               </div>
             </CardContent>
