@@ -41,6 +41,20 @@ type RequestVoteResult struct {
 	VoteGranted bool
 }
 
+type CommandArgs struct {
+	Command Command
+}
+
+type CommandResult struct {
+	stringval string
+}
+
+func (raftRpc *RaftRPC) RelayCommand(args *CommandArgs, res *CommandResult) error {
+	strval, _ := raftRpc.node.handleCommand(args.Command)
+	res.stringval = strval
+	return nil
+}
+
 func (raftRpc *RaftRPC) RequestVote(args *RequestVoteArgs, res *RequestVoteResult) error {
 	success, term := raftRpc.node.handleRequestVote(args)
 	res.Term = term
@@ -109,4 +123,21 @@ func (node *RaftNode) SendRequestVote(peerId int32, args *RequestVoteArgs) (*Req
 		return nil, fmt.Errorf("RPC call failed: %v", err)
 	}
 	return res, nil
+}
+
+func (node *RaftNode) RelayCommandFromNode(leaderId int32, args Command) (string, error) {
+	clientAddress, ok := node.peers[leaderId]
+	if !ok {
+		return "", fmt.Errorf("no peer %d", leaderId)
+	}
+	client, err := rpc.Dial("tcp", clientAddress)
+	if err != nil {
+
+		return "", fmt.Errorf("no connection to leader %d", leaderId)
+	}
+	defer client.Close()
+	res := &CommandResult{}
+	formatargs := &CommandArgs{args}
+	_ = client.Call("RaftRPC.RelayCommand", formatargs, res)
+	return res.stringval, nil
 }

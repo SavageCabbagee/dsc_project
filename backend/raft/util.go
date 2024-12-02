@@ -1,7 +1,6 @@
 package raft
 
 import (
-	"fmt"
 	"math/rand"
 	"time"
 )
@@ -11,7 +10,7 @@ const leaderHeartbeat = 2 * time.Second
 
 func randomTimeout() <-chan time.Time {
 	extra := time.Duration(rand.Int()) % minTimeout
-	fmt.Println(minTimeout + extra)
+	// fmt.Println("TIMEOUT: ", minTimeout+extra)
 	return time.After(minTimeout + extra)
 }
 
