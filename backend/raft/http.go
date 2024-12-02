@@ -103,20 +103,14 @@ func (server *RaftHTTPServer) handleKeyRequest(w http.ResponseWriter, r *http.Re
 
 	switch r.Method {
 	case "GET":
-		// fmt.Println("HERE")
-		// fmt.Println(key)
 		if key == "" {
 			w.WriteHeader(http.StatusBadRequest)
 		}
-
-		// fmt.Println(key)
 		value, err := server.node.handleCommand(Command{"GET", key, ""})
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		// fmt.Println(value)
-
 		response := KeyValueRequest{
 			Key:   key,
 			Value: value,
