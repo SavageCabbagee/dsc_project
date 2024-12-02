@@ -25,6 +25,10 @@ const nodeAddresses = [
   "http://localhost:11003",
   "http://localhost:11004",
   "http://localhost:11005",
+  "http://localhost:11006",
+  "http://localhost:11007",
+  "http://localhost:11008",
+  "http://localhost:11009",
 
 ];
 

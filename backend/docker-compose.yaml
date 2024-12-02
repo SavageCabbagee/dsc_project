@@ -1,3 +1,78 @@
+# services:
+#   node1:
+#     build: .
+#     ports:
+#       - "11001:11000"  # HTTP port
+#       - "12001:12000"  # Raft port
+#     command: >
+#       ./raft-server 
+#       -id 1
+#       -haddr 0.0.0.0:11000
+#       -raddr 0.0.0.0:12000
+#       -peers 2=node2:12000,3=node3:12000,4=node4:12000,5=node5:12000
+#     networks:
+#       - raft-net
+
+#   node2:
+#     build: .
+#     ports:
+#       - "11002:11000"
+#       - "12002:12000"
+#     command: >
+#       ./raft-server 
+#       -id 2
+#       -haddr 0.0.0.0:11000
+#       -raddr 0.0.0.0:12000
+#       -peers 1=node1:12000,3=node3:12000,4=node4:12000,5=node5:12000
+#     networks:
+#       - raft-net
+
+#   node3:
+#     build: .
+#     ports:
+#       - "11003:11000"
+#       - "12003:12000"
+#     command: >
+#       ./raft-server 
+#       -id 3
+#       -haddr 0.0.0.0:11000
+#       -raddr 0.0.0.0:12000
+#       -peers 1=node1:12000,2=node2:12000,4=node4:12000,5=node5:12000
+#     networks:
+#       - raft-net
+
+#   node4:
+#     build: .
+#     ports:
+#       - "11004:11000"
+#       - "12004:12000"
+#     command: >
+#       ./raft-server 
+#       -id 4
+#       -haddr 0.0.0.0:11000
+#       -raddr 0.0.0.0:12000
+#       -peers 1=node1:12000,2=node2:12000,3=node3:12000,5=node5:12000
+#     networks:
+#       - raft-net
+
+#   node5:
+#     build: .
+#     ports:
+#       - "11005:11000"
+#       - "12005:12000"
+#     command: >
+#       ./raft-server 
+#       -id 5
+#       -haddr 0.0.0.0:11000
+#       -raddr 0.0.0.0:12000
+#       -peers 1=node1:12000,2=node2:12000,3=node3:12000,4=node4:12000
+#     networks:
+#       - raft-net
+
+# networks:
+#   raft-net:
+#     driver: bridge
+
 services:
   node1:
     build: .
@@ -9,7 +84,7 @@ services:
       -id 1
       -haddr 0.0.0.0:11000
       -raddr 0.0.0.0:12000
-      -peers 2=node2:12000,3=node3:12000,4=node4:12000,5=node5:12000
+      -peers 2=node2:12000,3=node3:12000,4=node4:12000,5=node5:12000,6=node6:12000,7=node7:12000,8=node8:12000,9=node9:12000
     networks:
       - raft-net
 
@@ -23,7 +98,7 @@ services:
       -id 2
       -haddr 0.0.0.0:11000
       -raddr 0.0.0.0:12000
-      -peers 1=node1:12000,3=node3:12000,4=node4:12000,5=node5:12000
+      -peers 1=node1:12000,3=node3:12000,4=node4:12000,5=node5:12000,6=node6:12000,7=node7:12000,8=node8:12000,9=node9:12000
     networks:
       - raft-net
 
@@ -37,7 +112,7 @@ services:
       -id 3
       -haddr 0.0.0.0:11000
       -raddr 0.0.0.0:12000
-      -peers 1=node1:12000,2=node2:12000,4=node4:12000,5=node5:12000
+      -peers 1=node1:12000,2=node2:12000,4=node4:12000,5=node5:12000,6=node6:12000,7=node7:12000,8=node8:12000,9=node9:12000
     networks:
       - raft-net
 
@@ -51,7 +126,7 @@ services:
       -id 4
       -haddr 0.0.0.0:11000
       -raddr 0.0.0.0:12000
-      -peers 1=node1:12000,2=node2:12000,3=node3:12000,5=node5:12000
+      -peers 1=node1:12000,2=node2:12000,3=node3:12000,5=node5:12000,6=node6:12000,7=node7:12000,8=node8:12000,9=node9:12000
     networks:
       - raft-net
 
@@ -65,7 +140,63 @@ services:
       -id 5
       -haddr 0.0.0.0:11000
       -raddr 0.0.0.0:12000
-      -peers 1=node1:12000,2=node2:12000,3=node3:12000,4=node4:12000
+      -peers 1=node1:12000,2=node2:12000,3=node3:12000,4=node4:12000,6=node6:12000,7=node7:12000,8=node8:12000,9=node9:12000
+    networks:
+      - raft-net
+
+  node6:
+    build: .
+    ports:
+      - "11006:11000"
+      - "12006:12000"
+    command: >
+      ./raft-server 
+      -id 6
+      -haddr 0.0.0.0:11000
+      -raddr 0.0.0.0:12000
+      -peers 1=node1:12000,2=node2:12000,3=node3:12000,4=node4:12000,5=node5:12000,7=node7:12000,8=node8:12000,9=node9:12000
+    networks:
+      - raft-net
+
+  node7:
+    build: .
+    ports:
+      - "11007:11000"
+      - "12007:12000"
+    command: >
+      ./raft-server 
+      -id 7
+      -haddr 0.0.0.0:11000
+      -raddr 0.0.0.0:12000
+      -peers 1=node1:12000,2=node2:12000,3=node3:12000,4=node4:12000,5=node5:12000,6=node6:12000,8=node8:12000,9=node9:12000
+    networks:
+      - raft-net
+
+  node8:
+    build: .
+    ports:
+      - "11008:11000"
+      - "12008:12000"
+    command: >
+      ./raft-server 
+      -id 8
+      -haddr 0.0.0.0:11000
+      -raddr 0.0.0.0:12000
+      -peers 1=node1:12000,2=node2:12000,3=node3:12000,4=node4:12000,5=node5:12000,6=node6:12000,7=node7:12000,9=node9:12000
+    networks:
+      - raft-net
+
+  node9:
+    build: .
+    ports:
+      - "11009:11000"
+      - "12009:12000"
+    command: >
+      ./raft-server 
+      -id 9
+      -haddr 0.0.0.0:11000
+      -raddr 0.0.0.0:12000
+      -peers 1=node1:12000,2=node2:12000,3=node3:12000,4=node4:12000,5=node5:12000,6=node6:12000,7=node7:12000,8=node8:12000
     networks:
       - raft-net
 
