@@ -4,16 +4,7 @@ const cors = require('cors');
 
 const app = express();
 app.use(express.json());
-app.use(cors({
-  origin: (origin, callback) => {
-    if (origin && origin.includes('localhost')) {
-      // Allow requests from any localhost origin
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-}));
+app.use(cors());
 
 app.post('/api/start-container', (req, res) => {
   console.log("CALLED");

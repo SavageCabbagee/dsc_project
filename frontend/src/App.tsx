@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "./components/button";
 import { Input } from "./components/input";
 import { Card, CardContent, CardHeader, CardTitle } from "./components/card";
@@ -49,15 +49,22 @@ export default function Component() {
     8: { key: "", value: "" },
     9: { key: "", value: "" },
   });
-
-  let originalStatus = {nodeId: -99, state: -99, currentTerm: -99, votedFor: -99, leaderId: -99, lastLogIndex: -99, lastLogTerm: -99, logs: [], store: {}}
+  interface FaultSimulator {
+    id: number;
+    name: string;
+  }
+  const [currentFault, setCurrentFault] = useState(Number)
+  const [activeFaultList, setActiveFaultList] = useState<FaultSimulator[]>([]);
+  const [isTaskRunning, setIsTaskRunning] = useState<boolean>(false);
+  const sessionsRef = useRef<FaultSimulator[]>([]);
+  let originalStatus = { nodeId: -99, state: -99, currentTerm: -99, votedFor: -99, leaderId: -99, lastLogIndex: -99, lastLogTerm: -99, logs: [], store: {} }
 
   useEffect(() => {
     let originalNodeStatuses = [];
     for (const key in keyValues) {
-      originalNodeStatuses.push({...originalStatus , nodeId: key})
+      originalNodeStatuses.push({ ...originalStatus, nodeId: key })
     }
-  },[])
+  }, [])
 
   useEffect(() => {
     const fetchStatuses = async () => {
@@ -65,8 +72,8 @@ export default function Component() {
         nodeAddresses.map((address, index) =>
           fetch(`${address}/status`)
             .then((res) => res.json())
-            .catch(() => ({...originalStatus , nodeId: index+1}))
-            // .catch(() => null)
+            .catch(() => ({ ...originalStatus, nodeId: index + 1 }))
+          // .catch(() => null)
         )
       );
       setNodeStatuses(statuses.filter(Boolean));
@@ -126,6 +133,77 @@ export default function Component() {
       }),
     });
   };
+  const handleCloseSession = (faultId: number) => {
+    setActiveFaultList((prevFault) =>
+      prevFault.filter((fault) => fault.id !== faultId)
+    );
+  };
+  const handleAddSession = () => {
+
+    // Validate input
+    if (currentFault > 9 || currentFault < 1) {
+      alert("Node Doesn't Exist!");
+      return;
+    }
+    if (activeFaultList.map((x) => { return x.id }).indexOf(currentFault) != -1) {
+      alert("Node Already Under Intermittent Fault");
+      return;
+    }
+
+    // Add the new session to the list
+    setActiveFaultList((prevFault) => [
+      ...prevFault,
+      { id: currentFault, name: "Node " + currentFault.toString() },
+    ]);
+
+  };
+  const simulateFault = async (fault: FaultSimulator) => {
+    console.log(`Started Fault loop for ${fault.name}`);
+    const sleep = (delay: number) => new Promise((resolve) => setTimeout(resolve, delay))
+    // Simulate async task, e.g., waiting for a timeout
+    var sleepTime = (Math.random() * 7) + 4
+    var waitTime = 10 - sleepTime
+    await sleep(waitTime * 1000)
+    handleKill(fault.id)
+
+    await sleep(sleepTime * 1000)
+    handleStart(fault.id)
+
+    console.log(`Completed Loop for ${fault.name}`);
+  };
+
+  const runActiveFaults = async () => {
+    for (const fault of sessionsRef.current) {
+      simulateFault(fault); // Run tasks sequentially
+      // If you want them to run concurrently, you can use:
+    }
+  };
+  useEffect(() => {
+    sessionsRef.current = activeFaultList;
+  }, [activeFaultList]);
+
+  const startBackgroundTasks = async () => {
+    if (isTaskRunning) return; // Prevent multiple intervals from starting
+    setIsTaskRunning(true);
+
+    while (true) {
+      if (sessionsRef.current.length === 0) {
+        console.log("No active sessions. Waiting...");
+        await new Promise((resolve) => setTimeout(resolve, 11000)); // Wait before checking again
+        continue;
+      }
+
+      runActiveFaults();
+
+
+      await new Promise((resolve) => setTimeout(resolve, 11000)); // Wait 10 seconds before next cycle
+      console.log("Completed cycle. Running next cycle...");
+    }
+  };
+  startBackgroundTasks()
+
+
+
 
   return (
     <div className='container mx-auto p-4'>
@@ -237,6 +315,53 @@ export default function Component() {
             </CardContent>
           </Card>
         ))}
+
+      </div>
+      <div className="block">
+        <div className="flex flex-col justify-center align-middle w-1/3 m-auto text-center">
+          <h2 className="text-base font-bold mb-4">Node Number</h2>
+          <Input
+            className=" w-auto my-3"
+            id="intermittentFault"
+            type="number"
+            value={Number(currentFault).toString()}
+            onChange={(e) => {
+              const sanitizedValue = parseInt(e.target.value, 10);
+              setCurrentFault(Number(sanitizedValue))
+            }}
+          >
+          </Input>
+          <Button className="bg-green-600 my-3"
+            onClick={() => handleAddSession()}>
+            Intermittent Faults
+          </Button>
+
+
+
+        </div>
+        <div className="p-4">
+          <h1 className="text-lg font-bold mb-4">Active Fault Simulations</h1>
+          <div className="flex flex-wrap gap-4">
+            {activeFaultList.map((fault) => (
+              <div
+                key={fault.id}
+                className="flex items-center justify-between bg-gray-200 p-4 rounded-md shadow-md w-64"
+              >
+                <span className="text-gray-700 font-bold">{fault.name}</span>
+
+                <button
+                  onClick={() => handleCloseSession(fault.id)}
+                  className="text-red-500 hover:text-red-700 font-bold"
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+          {activeFaultList.length === 0 && (
+            <p className="text-gray-500 mt-4">No active sessions.</p>
+          )}
+        </div>
       </div>
     </div>
   );
