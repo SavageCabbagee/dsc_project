@@ -153,7 +153,7 @@ func (node *RaftNode) handleCommand(command Command) (string, error) {
 		return node.store.Get(command.Key), nil
 	}
 	if node.state.Load() != LEADER {
-		if command.Operation == "SET" {
+		if command.Operation == "SET" || command.Operation == "DELETE" {
 			// If not leader and is to set, then send request to leader.
 			strval, errorval := node.RelayCommandFromNode(node.leaderId.Load(), command)
 
